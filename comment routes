@@ -1,1 +1,115 @@
+// POST /api/items/:itemId/reviews/:reviewId/comments - Protected route
+router.post('/:itemId/reviews/:reviewId/comments', auth, async (req, res) => {
+  const { text } = req.body;
+
+  try {
+    // Check if review exists
+    const review = await Review.findById(req.params.reviewId);
+    if (!review) {
+      return res.status(404).json({ msg: 'Review not found' });
+    }
+
+    // Create new comment
+    const newComment = new Comment({
+      text,
+      user: req.user.id,
+      review: req.params.reviewId
+    });
+
+    await newComment.save();
+
+    res.json(newComment);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Review not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
+// GET /api/comments/me - Protected route
+router.get('/me', auth, async (req, res) => {
+  try {
+    const comments = await Comment.find({ user: req.user.id })
+      .populate('review', ['text'])
+      .sort({ createdAt: -1 });
+    
+    res.json(comments);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// PUT /api/users/:userId/comments/:commentId - Protected route
+router.put('/:userId/comments/:commentId', auth, async (req, res) => {
+  const { text } = req.body;
+
+  try {
+    // Check if user ID in params matches authenticated user
+    if (req.params.userId !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Find comment
+    const comment = await Comment.findById(req.params.commentId);
+    
+    if (!comment) {
+      return res.status(404).json({ msg: 'Comment not found' });
+    }
+
+    // Check if comment belongs to user
+    if (comment.user.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Update comment
+    comment.text = text;
+    comment.updatedAt = Date.now();
+
+    await comment.save();
+
+    res.json(comment);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Comment not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
+// DELETE /api/users/:userId/comments/:commentId - Protected route
+router.delete('/:userId/comments/:commentId', auth, async (req, res) => {
+  try {
+    // Check if user ID in params matches authenticated user
+    if (req.params.userId !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Find comment
+    const comment = await Comment.findById(req.params.commentId);
+    
+    if (!comment) {
+      return res.status(404).json({ msg: 'Comment not found' });
+    }
+
+    // Check if comment belongs to user
+    if (comment.user.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Delete comment
+    await comment.remove();
+
+    res.json({ msg: 'Comment deleted' });
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Comment not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
 
