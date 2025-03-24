@@ -1,0 +1,130 @@
+// POST /api/items/:itemId/reviews - Protected route
+router.post('/:itemId/reviews', auth, async (req, res) => {
+  const { text, rating } = req.body;
+
+  try {
+    // Check if item exists
+    const item = await Item.findById(req.params.itemId);
+    if (!item) {
+      return res.status(404).json({ msg: 'Item not found' });
+    }
+
+    // Check if user already reviewed this item
+    const existingReview = await Review.findOne({ 
+      user: req.user.id,
+      item: req.params.itemId
+    });
+
+    if (existingReview) {
+      return res.status(400).json({ msg: 'You have already reviewed this item' });
+    }
+
+    // Create new review
+    const newReview = new Review({
+      text,
+      rating,
+      user: req.user.id,
+      item: req.params.itemId
+    });
+
+    await newReview.save();
+
+    res.json(newReview);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Item not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
+// GET /api/reviews/me - Protected route
+router.get('/me', auth, async (req, res) => {
+  try {
+    const reviews = await Review.find({ user: req.user.id })
+      .populate('item', ['name'])
+      .sort({ createdAt: -1 });
+    
+    res.json(reviews);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// PUT /api/users/:userId/reviews/:reviewId - Protected route
+router.put('/:userId/reviews/:reviewId', auth, async (req, res) => {
+  const { text, rating } = req.body;
+
+  try {
+    // Check if user ID in params matches authenticated user
+    if (req.params.userId !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Find review
+    const review = await Review.findById(req.params.reviewId);
+    
+    if (!review) {
+      return res.status(404).json({ msg: 'Review not found' });
+    }
+
+    // Check if review belongs to user
+    if (review.user.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Update review
+    review.text = text;
+    review.rating = rating;
+    review.updatedAt = Date.now();
+
+    await review.save();
+
+    res.json(review);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Review not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
+// DELETE /api/users/:userId/reviews/:reviewId - Protected route
+router.delete('/:userId/reviews/:reviewId', auth, async (req, res) => {
+  try {
+    // Check if user ID in params matches authenticated user
+    if (req.params.userId !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Find review
+    const review = await Review.findById(req.params.reviewId);
+    
+    if (!review) {
+      return res.status(404).json({ msg: 'Review not found' });
+    }
+
+    // Check if review belongs to user
+    if (review.user.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    // Delete all comments associated with this review
+    await Comment.deleteMany({ review: req.params.reviewId });
+
+    // Delete review
+    await review.remove();
+
+    res.json({ msg: 'Review deleted' });
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Review not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
