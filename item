@@ -1,0 +1,84 @@
+// GET /api/items
+router.get('/', async (req, res) => {
+    try {
+      const items = await Item.find().sort({ createdAt: -1 });
+      res.json(items);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server Error');
+    }
+  });
+  
+  // GET /api/items/:itemId
+  router.get('/:itemId', async (req, res) => {
+    try {
+      const item = await Item.findById(req.params.itemId);
+      
+      if (!item) {
+        return res.status(404).json({ msg: 'Item not found' });
+      }
+  
+      // Get average rating
+      const reviews = await Review.find({ item: req.params.itemId });
+      
+      let avgRating = 0;
+      if (reviews.length > 0) {
+        const totalRating = reviews.reduce((acc, review) => acc + review.rating, 0);
+        avgRating = totalRating / reviews.length;
+      }
+  
+      res.json({
+        ...item._doc,
+        avgRating,
+        reviewCount: reviews.length
+      });
+    } catch (err) {
+      console.error(err.message);
+      if (err.kind === 'ObjectId') {
+        return res.status(404).json({ msg: 'Item not found' });
+      }
+      res.status(500).send('Server Error');
+    }
+  });
+  
+  // GET /api/items/:itemId/reviews
+  router.get('/:itemId/reviews', async (req, res) => {
+    try {
+      const reviews = await Review.find({ item: req.params.itemId })
+        .populate('user', ['username'])
+        .sort({ createdAt: -1 });
+      
+      res.json(reviews);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server Error');
+    }
+  });
+  
+  // GET /api/items/:itemId/reviews/:reviewId
+  router.get('/:itemId/reviews/:reviewId', async (req, res) => {
+    try {
+      const review = await Review.findById(req.params.reviewId)
+        .populate('user', ['username']);
+      
+      if (!review) {
+        return res.status(404).json({ msg: 'Review not found' });
+      }
+  
+      // Get comments for the review
+      const comments = await Comment.find({ review: req.params.reviewId })
+        .populate('user', ['username'])
+        .sort({ createdAt: -1 });
+  
+      res.json({
+        review,
+        comments
+      });
+    } catch (err) {
+      console.error(err.message);
+      if (err.kind === 'ObjectId') {
+        return res.status(404).json({ msg: 'Review not found' });
+      }
+      res.status(500).send('Server Error');
+    }
+  });
